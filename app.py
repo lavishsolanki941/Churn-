@@ -23,15 +23,20 @@ gemini = get_gemini_client()
 MODEL_FALLBACKS = ["gemini-3.5-flash", "gemini-3.6-flash",
                    "gemini-3.7-flash", "gemini-flash-lite-latest"]
 
-def ask_gemini(prompt, retries=2):
-    """Try each model in turn with backoff until one responds."""
+def ask_gemini(prompt):
+    """Try each model once; move on fast if one is busy."""
     for model in MODEL_FALLBACKS:
-        for attempt in range(retries):
-            try:
-                return gemini.models.generate_content(model=model, contents=prompt).text
-            except errors.ServerError:
-                time.sleep(2 ** attempt)
+        try:
+            return gemini.models.generate_content(model=model, contents=prompt).text
+        except errors.ServerError:
+            continue   # busy → immediately try the next model, no waiting
     return "(All Gemini models are busy right now — try again in a few minutes.)"
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def ask_gemini_cached(prompt):
+    return ask_gemini(prompt)
+
 
 def build_retention_prompt(churn_prob, tenure, monthly, contract, reasons):
     reasons_text = "\n".join(f"- {r}" for r in reasons)
