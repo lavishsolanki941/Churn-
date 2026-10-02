@@ -124,13 +124,19 @@ if st.button("Predict churn risk", type="primary"):
         st.success(f"✅ No action needed — below the {ACTION_THRESHOLD:.0%} action threshold.")
 
 
-    # Descriptive severity (by magnitude, separate from the action decision)
+    # Descriptive severity — large, colour-coded
     if prob >= 0.60:
-        st.caption("Risk level: **High**")
+        level, color = "High", "#d64545"
     elif prob >= 0.35:
-        st.caption("Risk level: **Moderate**")
+        level, color = "Moderate", "#e08a1e"
     else:
-        st.caption("Risk level: **Low**")
+        level, color = "Low", "#2f7a55"
+        
+    st.markdown(
+        f"<span style='font-size:1.5rem; font-weight:700; color:{color};'>"
+        f"Risk level: {level}</span>",
+        unsafe_allow_html=True,
+    )
 
     # Retention recommendation (mirrors Phase 6 logic)
     value = monthly * 12
