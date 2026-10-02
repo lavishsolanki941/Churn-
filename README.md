@@ -42,3 +42,27 @@ Python, pandas, scikit-learn, XGBoost, SHAP, matplotlib/seaborn
 pip install -r requirements.txt
 jupyter lab   # open churn_prediction.ipynb and run all
 ```
+
+## Scope
+
+- **Phase 1 (complete):** churn model, evaluation, SHAP explainability, retention-ROI ranking, Streamlit demo.
+- **Phase 2A (complete):** LLM retention-action generator — Gemini turns the model's SHAP risk factors into a written retention plan with a specific recommended offer.
+- **Phase 2B (not implemented):** RAG offer matcher — see Future scope.
+
+## Phase 2A — LLM Retention-Action Generator ✅
+
+Built on top of the Phase 1 model (XGBoost still does all prediction; the LLM only explains and recommends).
+
+- Takes the customer's churn probability + SHAP risk factors → generates a structured retention plan
+- Prompt engineered with explicit role, context, constraints, and output format
+- Anti-hallucination constraint: the model may only reason from the provided risk factors
+- Model-fallback chain with exponential backoff across four Gemini Flash models for reliability
+- API key stored in `.env` (git-ignored), never committed
+
+## Future scope (not implemented)
+
+- **RAG offer matcher** — embed a real offer catalogue in a vector store, retrieve the best-fit offers, and have the LLM select from them instead of generating offers freely.
+- Structured JSON output from the LLM.
+- Uplift modeling / contextual bandit for offer selection.
+- Decision-threshold tuning.
+- Deployment as a Spring Boot API + Python model microservice.

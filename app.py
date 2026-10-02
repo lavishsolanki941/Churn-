@@ -1,10 +1,62 @@
+import os, time
 import streamlit as st
 import pandas as pd
 import joblib
+from dotenv import load_dotenv
+from google import genai
+from google.genai import errors
 
 st.set_page_config(page_title="Churn Predictor", page_icon="📡", layout="centered")
 
-# --- Load the saved model, preprocessor, and data (cached so it loads once) ---
+load_dotenv()
+
+# --- Gemini setup ---
+@st.cache_resource
+def get_gemini_client():
+    return genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+gemini = get_gemini_client()
+
+MODEL_FALLBACKS = ["gemini-3.5-flash", "gemini-3.6-flash",
+                   "gemini-3.7-flash", "gemini-flash-lite-latest"]
+
+def ask_gemini(prompt, retries=2):
+    """Try each model in turn with backoff until one responds."""
+    for model in MODEL_FALLBACKS:
+        for attempt in range(retries):
+            try:
+                return gemini.models.generate_content(model=model, contents=prompt).text
+            except errors.ServerError:
+                time.sleep(2 ** attempt)
+    return "(All Gemini models are busy right now — try again in a few minutes.)"
+
+def build_retention_prompt(churn_prob, tenure, monthly, contract, reasons):
+    reasons_text = "\n".join(f"- {r}" for r in reasons)
+    return f"""You are a senior customer-retention strategist at a telecom company.
+
+CONTEXT — a churn model flagged this customer:
+- Churn probability: {churn_prob:.0%}
+- Tenure: {tenure} months
+- Monthly bill: ₹{monthly:.0f}
+- Contract: {contract}
+- Key risk factors identified by the model (SHAP):
+{reasons_text}
+
+TASK:
+Write a short retention plan for this specific customer.
+
+CONSTRAINTS:
+- Base your reasoning ONLY on the risk factors above. Do not invent data.
+- Suggest ONE concrete retention offer that directly addresses the top risk factor.
+- Keep it under 120 words. Be practical, not generic.
+
+OUTPUT FORMAT:
+Risk summary: <one sentence>
+Recommended offer: <one specific offer>
+Why it works: <one sentence tying it to the risk factors>
+"""
+
+# --- Load the saved model, preprocessor, and data ---
 @st.cache_resource
 def load_artifacts():
     model = joblib.load("churn_model.joblib")
@@ -13,6 +65,7 @@ def load_artifacts():
     return model, preprocessor, df
 
 model, preprocessor, df = load_artifacts()
+
 
 st.title("📡 Telecom Churn Predictor")
 st.caption("Enter a customer's details to get their churn risk, reasons, and a retention recommendation.")
@@ -46,9 +99,11 @@ row.update({
 X_one = pd.DataFrame([row])[feature_cols]
 
 # --- Predict ---
+want_plan = st.checkbox("🤖 Also generate an AI retention plan (Gemini)")
+
 if st.button("Predict churn risk", type="primary"):
     X_t = preprocessor.transform(X_one)
-    prob = float(model.predict_proba(X_t)[:, 1][0])
+    prob = float(model.predict_proba(X_t)[:, 1][0])     
 
     st.metric("Churn probability", f"{prob:.0%}")
     if prob >= 0.6:
@@ -68,14 +123,15 @@ if st.button("Predict churn risk", type="primary"):
 
 
     # Top reasons via SHAP
-        # --- Explain the prediction in plain English ---
+    # --- Explain the prediction in plain English ---
+
+    raises, lowers = [], []
     try:
         import shap
         names = preprocessor.get_feature_names_out()
         sv = shap.TreeExplainer(model).shap_values(X_t)
         contrib = pd.Series(sv[0], index=names)
 
-        # Only explain features the user actually set in the form
         ALLOWED = {"tenure", "MonthlyCharges", "TotalCharges", "Contract",
                    "InternetService", "TechSupport", "OnlineSecurity",
                    "PaymentMethod", "SeniorCitizen"}
@@ -85,19 +141,18 @@ if st.button("Predict churn risk", type="primary"):
             if feat.startswith("cat__"): return feat[5:].split("_", 1)[0]
             return feat
 
-        
-        # Customer's actual encoded values (1 = this category is active for them)
         row_vals = pd.Series(
             X_t.toarray()[0] if hasattr(X_t, "toarray") else X_t[0], index=names
         )
+
         def keep(f):
             if base_col(f) not in ALLOWED:
                 return False
             if f.startswith("cat__"):
-                return row_vals[f] == 1   # only the category the customer truly has
-            return True                    # keep all numeric features
-        contrib = contrib[[f for f in contrib.index if keep(f)]]
+                return row_vals[f] == 1
+            return True
 
+        contrib = contrib[[f for f in contrib.index if keep(f)]]
 
         def humanize(feat):
             f = feat.replace("num__", "").replace("cat__", "")
@@ -148,6 +203,19 @@ if st.button("Predict churn risk", type="primary"):
             if not lowers: st.caption("None significant")
     except Exception as e:
         st.caption(f"(Explanation unavailable: {e})")
+
+    if want_plan:
+        if not raises:
+            st.warning("No risk factors available — skipping AI plan.")
+        else:
+            st.subheader("🤖 AI-Generated Retention Plan")
+            with st.spinner("Generating plan with Gemini..."):
+                prompt = build_retention_prompt(prob, tenure, monthly, contract, raises)
+                plan = ask_gemini(prompt)
+            st.markdown(plan)
+            st.caption("Generated by Gemini from the model's SHAP risk factors — not a prediction.")
+
+
 
 
 
