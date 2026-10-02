@@ -106,9 +106,10 @@ if st.button("Predict churn risk", type="primary"):
     prob = float(model.predict_proba(X_t)[:, 1][0])     
 
     st.metric("Churn probability", f"{prob:.0%}")
-    if prob >= 0.6:
+        # 0.35 = business-optimal threshold from cost-based tuning (not the default 0.5)
+    if prob >= 0.35:
         st.error("HIGH risk — prioritise for retention.")
-    elif prob >= 0.35:
+    elif prob >= 0.20:
         st.warning("MEDIUM risk — worth watching.")
     else:
         st.success("LOW risk — no action needed.")
