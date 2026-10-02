@@ -1,5 +1,11 @@
 # Telecom Customer Churn Prediction & Retention ROI
 
+### 🔗 [Live Demo](https://lavish-churn-predictor.streamlit.app/)
+
+![Churn prediction with SHAP explanation](screenshots/prediction.png)
+![AI-generated retention plan](screenshots/ai_plan.png)
+
+
 Predicts which telecom customers will churn, explains *why* (SHAP), and ranks
 which high-value customers to retain — with an ROI estimate for the campaign.
 
