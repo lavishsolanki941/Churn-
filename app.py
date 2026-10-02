@@ -13,8 +13,11 @@ load_dotenv()
 # --- Gemini setup ---
 @st.cache_resource
 def get_gemini_client():
-    return genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
+    # Works locally (.env) AND on Streamlit Cloud (st.secrets)
+    key = os.getenv("GEMINI_API_KEY")
+    if not key:
+        key = st.secrets.get("GEMINI_API_KEY")
+    return genai.Client(api_key=key)
 gemini = get_gemini_client()
 
 MODEL_FALLBACKS = ["gemini-3.5-flash", "gemini-3.6-flash",
