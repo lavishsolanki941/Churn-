@@ -114,19 +114,29 @@ if st.button("Predict churn risk", type="primary"):
     prob = float(model.predict_proba(X_t)[:, 1][0])     
 
     st.metric("Churn probability", f"{prob:.0%}")
-        # 0.35 = business-optimal threshold from cost-based tuning (not the default 0.5)
-    if prob >= 0.35:
-        st.error("HIGH risk — prioritise for retention.")
-    elif prob >= 0.20:
-        st.warning("MEDIUM risk — worth watching.")
+    ACTION_THRESHOLD = 0.35   # cost-optimal, from threshold tuning
+
+    # Action decision (based on the tuned business threshold)
+    if prob >= ACTION_THRESHOLD:
+        st.error(f"⚠️ Flag for retention — churn probability {prob:.0%} is above the "
+                 f"cost-optimal action threshold ({ACTION_THRESHOLD:.0%}).")
     else:
-        st.success("LOW risk — no action needed.")
+        st.success(f"✅ No action needed — below the {ACTION_THRESHOLD:.0%} action threshold.")
+
+
+    # Descriptive severity (by magnitude, separate from the action decision)
+    if prob >= 0.60:
+        st.caption("Risk level: **High**")
+    elif prob >= 0.35:
+        st.caption("Risk level: **Moderate**")
+    else:
+        st.caption("Risk level: **Low**")
 
     # Retention recommendation (mirrors Phase 6 logic)
     value = monthly * 12
     st.write(f"**12-month value:** ₹{value:,.0f}  ·  **Priority score:** {prob * value:,.0f}")
-    if prob >= 0.6 and value > df["MonthlyCharges"].median() * 12:
-        st.info("💡 High-value AND high-risk → strong retention-offer candidate.")
+    if prob >= ACTION_THRESHOLD and value > df["MonthlyCharges"].median() * 12:
+        st.info("💡 High-value AND flagged for retention → strong offer candidate.")
 
 
 
