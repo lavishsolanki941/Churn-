@@ -33,7 +33,17 @@ Telco Customer Churn (7,043 customers, 26.5% churn — imbalanced).
 
 - Evaluated on **recall / ROC-AUC** (not accuracy) due to class imbalance
 - Top churn drivers: month-to-month contract, low tenure, high charges
-- Retention ROI: targeting top 500 at-risk high-value customers → ~5x return (on stated assumptions)
+- **Decision threshold: 0.35**, chosen by sweeping thresholds against the retention cost model
+  (offer \$50, 30% success rate) on the test set. Net value is fairly flat between 0.30 and 0.45.
+- **Retention ROI: ~226%** (on stated assumptions). Scored only *active* (non-churned) customers
+  from the held-out test set (1,035), targeting the 391 the model flags at ≥ 0.35:
+  \$19,550 spend → ~\$63.7k expected revenue saved.
+
+> **Note — risk scores, not probabilities.** The model is trained with `scale_pos_weight`
+> to handle class imbalance, so its outputs are *uncalibrated risk scores*: they rank customers
+> well (ROC-AUC 0.845) but run high as probabilities (mean score 0.41 vs. actual churn rate
+> 0.27 on the test set). The "churn probability" shown in the app and the expected-value ROI
+> above should be read as relative risk, and the ROI figure is likely optimistic.
 
 ## Tech
 Python, pandas, scikit-learn, XGBoost, SHAP, matplotlib/seaborn
@@ -46,6 +56,20 @@ Python, pandas, scikit-learn, XGBoost, SHAP, matplotlib/seaborn
 ## How to run
 ```
 pip install -r requirements.txt
+```
+
+**Streamlit app**
+```
+# optional, enables the AI retention plan — create a .env file containing:
+#   GEMINI_API_KEY=your-key-here
+# (on Streamlit Cloud, set GEMINI_API_KEY in the app's Secrets instead)
+streamlit run app.py
+```
+Without a key the app still runs; only the AI retention plan is disabled.
+
+**Notebook**
+```
+pip install jupyterlab
 jupyter lab   # open churn_prediction.ipynb and run all
 ```
 
@@ -62,7 +86,8 @@ Built on top of the Phase 1 model (XGBoost still does all prediction; the LLM on
 - Takes the customer's churn probability + SHAP risk factors → generates a structured retention plan
 - Prompt engineered with explicit role, context, constraints, and output format
 - Anti-hallucination constraint: the model may only reason from the provided risk factors
-- Model-fallback chain with exponential backoff across four Gemini Flash models for reliability
+- Fail-fast model-fallback chain across four Gemini Flash models: on any API error (busy, rate-limited, unavailable) the app immediately tries the next model, with no backoff, to keep latency low
+- Successful responses are cached for an hour; failures are not cached, so the next click retries
 - API key stored in `.env` (git-ignored), never committed
 
 ## Future scope (not implemented)
@@ -70,5 +95,4 @@ Built on top of the Phase 1 model (XGBoost still does all prediction; the LLM on
 - **RAG offer matcher** — embed a real offer catalogue in a vector store, retrieve the best-fit offers, and have the LLM select from them instead of generating offers freely.
 - Structured JSON output from the LLM.
 - Uplift modeling / contextual bandit for offer selection.
-- Decision-threshold tuning.
 - Deployment as a Spring Boot API + Python model microservice.
